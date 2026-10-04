@@ -71,6 +71,14 @@ public class LedgerService {
     private com.evops.coldchain.mapper.BatchAlertZoneSnapMapper alertSnapMapper;
     @Resource
     private com.evops.coldchain.mapper.TempAlertMapper tempAlertMapper;
+    @Resource
+    private com.evops.coldchain.mapper.InspectionTaskMapper inspectionTaskMapper;
+    @Resource
+    private com.evops.coldchain.mapper.InspectionSampleMapper inspectionSampleMapper;
+    @Resource
+    private com.evops.coldchain.mapper.SampleTransferMapper sampleTransferMapper;
+    @Resource
+    private com.evops.coldchain.mapper.InspectionApprovalMapper inspectionApprovalMapper;
 
     public Map<String, Object> batchLedger(Long batchId) {
         TransportBatch batch = batchMapper.selectById(batchId);
@@ -193,6 +201,44 @@ public class LedgerService {
         settleInfo.put("settleRemark", batch.getSettleRemark());
         settleInfo.put("settled", batch.getSettleTime() != null);
         ledger.put("settlement", settleInfo);
+
+        // V7 运输抽检：监管区域 + 抽检结论回写（独立列，原始运输记录未改动）
+        Map<String, Object> inspectionInfo = new LinkedHashMap<>();
+        inspectionInfo.put("superviseRegion", batch.getSuperviseRegion());
+        inspectionInfo.put("inspectionResult", batch.getInspectionResult());
+        inspectionInfo.put("inspectionConclusion", batch.getInspectionConclusion());
+        inspectionInfo.put("inspectionBy", batch.getInspectionBy());
+        inspectionInfo.put("inspectionTime", batch.getInspectionTime());
+        // 抽检任务 -> 样本（唯一封存码/采样人/位置/数量/封存照片）-> 双人转移链，全程可追溯
+        List<com.evops.coldchain.entity.InspectionTask> inspectTasks = inspectionTaskMapper.selectList(
+                new QueryWrapper<com.evops.coldchain.entity.InspectionTask>()
+                        .eq("batch_id", batchId).orderByAsc("id"));
+        List<Map<String, Object>> inspectTaskList = new ArrayList<>();
+        for (com.evops.coldchain.entity.InspectionTask t : inspectTasks) {
+            Map<String, Object> tm = new LinkedHashMap<>();
+            tm.put("task", t);
+            List<com.evops.coldchain.entity.InspectionSample> samples = inspectionSampleMapper.selectList(
+                    new QueryWrapper<com.evops.coldchain.entity.InspectionSample>()
+                            .eq("task_id", t.getId()).orderByAsc("sample_seq"));
+            List<Map<String, Object>> sampleList = new ArrayList<>();
+            for (com.evops.coldchain.entity.InspectionSample s : samples) {
+                Map<String, Object> sm = new LinkedHashMap<>();
+                sm.put("sample", s);
+                sm.put("transfers", sampleTransferMapper.selectList(
+                        new QueryWrapper<com.evops.coldchain.entity.SampleTransfer>()
+                                .eq("sample_id", s.getId()).orderByAsc("transfer_seq")));
+                sampleList.add(sm);
+            }
+            tm.put("samples", sampleList);
+            inspectTaskList.add(tm);
+        }
+        inspectionInfo.put("tasks", inspectTaskList);
+        // 冷链运输审批链（申请 -> 同意/驳回；PENDING 表示只完成一半停留待处理）
+        inspectionInfo.put("approvals", inspectionApprovalMapper.selectList(
+                new QueryWrapper<com.evops.coldchain.entity.InspectionApproval>()
+                        .eq("batch_id", batchId).orderByAsc("id")));
+        ledger.put("inspection", inspectionInfo);
+
         ledger.put("opLogs", opLogs);
         return ledger;
     }

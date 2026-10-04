@@ -71,6 +71,17 @@ public class TransportBatch extends BaseEntity {
     private Long settleBy;
     private String settleRemark;
 
+    // —— V7 运输抽检：监管区域与抽检结论回写列（只写这些独立列，不覆盖任何原始运输记录）——
+    /** 批次归属监管区域（抽检查询按区域隔离） */
+    private String superviseRegion;
+    /** 最近一次回写结论的抽检任务ID */
+    private Long inspectionTaskId;
+    /** 抽检结论 PASS 合格 / FAIL 不合格 */
+    private String inspectionResult;
+    private String inspectionConclusion;
+    private Long inspectionBy;
+    private LocalDateTime inspectionTime;
+
     public String getBatchNo() { return batchNo; }
     public void setBatchNo(String batchNo) { this.batchNo = batchNo; }
     public Long getOrderId() { return orderId; }
@@ -151,4 +162,18 @@ public class TransportBatch extends BaseEntity {
     public void setSettleBy(Long settleBy) { this.settleBy = settleBy; }
     public String getSettleRemark() { return settleRemark; }
     public void setSettleRemark(String settleRemark) { this.settleRemark = settleRemark; }
+
+    // —— V7：监管区域 + 抽检结论回写 ——
+    public String getSuperviseRegion() { return superviseRegion; }
+    public void setSuperviseRegion(String superviseRegion) { this.superviseRegion = superviseRegion; }
+    public Long getInspectionTaskId() { return inspectionTaskId; }
+    public void setInspectionTaskId(Long inspectionTaskId) { this.inspectionTaskId = inspectionTaskId; }
+    public String getInspectionResult() { return inspectionResult; }
+    public void setInspectionResult(String inspectionResult) { this.inspectionResult = inspectionResult; }
+    public String getInspectionConclusion() { return inspectionConclusion; }
+    public void setInspectionConclusion(String inspectionConclusion) { this.inspectionConclusion = inspectionConclusion; }
+    public Long getInspectionBy() { return inspectionBy; }
+    public void setInspectionBy(Long inspectionBy) { this.inspectionBy = inspectionBy; }
+    public LocalDateTime getInspectionTime() { return inspectionTime; }
+    public void setInspectionTime(LocalDateTime inspectionTime) { this.inspectionTime = inspectionTime; }
 }

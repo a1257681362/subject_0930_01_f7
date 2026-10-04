@@ -82,6 +82,8 @@ public class TransportBatchService {
     @Resource
     private ExceptionLifecycleService exceptionLifecycleService;
     @Resource
+    private ApprovalService approvalService;
+    @Resource
     private OpLogService opLogService;
 
     /** 派车：生成稳定批次号，固化档案快照，关联发货单与车辆 */
@@ -115,6 +117,9 @@ public class TransportBatchService {
         batch.setPackageSpecSnap(version.getPackageSpec());
         // 路线引用（季节版本与分段在发运时才选定并快照，故此处 version* 留空）
         batch.setRouteId(req.getRouteId());
+        // V7 监管区域：派车可指定，作为抽检查询区域隔离依据；不传也可首次抽检时补登
+        batch.setSuperviseRegion(req.getSuperviseRegion() == null ? null
+                : (req.getSuperviseRegion().trim().isEmpty() ? null : req.getSuperviseRegion().trim()));
         // 运输信息
         batch.setReceiverOrg(order.getReceiverOrg());
         batch.setShipQty(order.getShipQty());
@@ -154,6 +159,10 @@ public class TransportBatchService {
         if (!CcConstants.BATCH_DISPATCHED.equals(batch.getStatus())) {
             throw new BusinessException("仅已派车批次允许发运，当前状态: " + batch.getStatus());
         }
+
+        // V7 冷链运输审批卡口：发起过审批的批次，只完成一半（PENDING）停留待处理、
+        // 已驳回（REJECTED）均不得发运；审批同意（APPROVED）才放行。未发起审批不受此卡口约束。
+        approvalService.requireApprovedForShip(batchId);
 
         // 发运前卡口：车辆必须绑定仍在有效期内的持证探头（接口与页面共用这一道校验）
         VehicleProbe probeBinding = probeService.requireValidBindingForShip(batch.getVehicleId());

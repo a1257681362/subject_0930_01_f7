@@ -215,4 +215,54 @@ public final class CcConstants {
     public static final String ACT_EXC_ESCALATE = "EXCEPTION_ESCALATE";
     public static final String ACT_BATCH_REJECT = "BATCH_REJECT";
     public static final String ACT_BATCH_SETTLE = "BATCH_SETTLE";
+
+    // —— V7 药品运输抽检与运输审批 ——
+    /** 监管岗（发起抽检任务/样本封存/转移/结论） */
+    public static final String ROLE_INSPECTOR = "INSPECTOR";
+
+    // 抽检任务状态（PLANNED 立项封存中 / CONCLUDED 已出结论；不提供删除）
+    public static final String TASK_PLANNED = "PLANNED";
+    public static final String TASK_CONCLUDED = "CONCLUDED";
+    // 抽检结论（回写批次独立列，不覆盖原始运输记录）
+    public static final String INSPECT_PASS = "PASS";
+    public static final String INSPECT_FAIL = "FAIL";
+    // 样本状态（SEALED 已封存 / TRANSFERRED 已完成双人转移；只进不退、不可删除）
+    public static final String SAMPLE_SEALED = "SEALED";
+    public static final String SAMPLE_TRANSFERRED = "TRANSFERRED";
+    // 样本转移单状态（PENDING 待第二人确认 / CONFIRMED 双人确认完成）
+    public static final String TRANSFER_PENDING = "PENDING";
+    public static final String TRANSFER_CONFIRMED = "CONFIRMED";
+    // 冷链运输审批状态（PENDING 只完成一半停留待处理 / APPROVED 同意 / REJECTED 驳回）
+    public static final String APPROVAL_PENDING = "PENDING";
+    public static final String APPROVAL_APPROVED = "APPROVED";
+    public static final String APPROVAL_REJECTED = "REJECTED";
+
+    // V7 操作日志实体类型
+    public static final String ENT_INSPECTION = "INSPECTION";
+    public static final String ENT_SAMPLE = "SAMPLE";
+    public static final String ENT_SAMPLE_TRANSFER = "SAMPLE_TRANSFER";
+    public static final String ENT_APPROVAL = "APPROVAL";
+
+    // V7 操作动作
+    public static final String ACT_INSPECTION_CREATE = "INSPECTION_CREATE";
+    public static final String ACT_SAMPLE_SEAL = "SAMPLE_SEAL";
+    public static final String ACT_SAMPLE_TRANSFER_REQUEST = "SAMPLE_TRANSFER_REQUEST";
+    public static final String ACT_SAMPLE_TRANSFER_CONFIRM = "SAMPLE_TRANSFER_CONFIRM";
+    public static final String ACT_INSPECTION_CONCLUDE = "INSPECTION_CONCLUDE";
+    public static final String ACT_INSPECTION_EXPORT = "INSPECTION_EXPORT";
+    public static final String ACT_APPROVAL_APPLY = "APPROVAL_APPLY";
+    public static final String ACT_APPROVAL_APPROVE = "APPROVAL_APPROVE";
+    public static final String ACT_APPROVAL_REJECT = "APPROVAL_REJECT";
+
+    // —— V7 Shiro 权限点 ——
+    /** 抽检查看（列表/详情，另按监管区域隔离） */
+    public static final String PERM_INSPECTION_VIEW = "coldchain:inspection:view";
+    /** 抽检办理（建任务/样本封存/转移/出结论） */
+    public static final String PERM_INSPECTION_MANAGE = "coldchain:inspection:manage";
+    /** 抽检台账导出（导出文件承运人联系方式脱敏） */
+    public static final String PERM_INSPECTION_EXPORT = "coldchain:inspection:export";
+    /** 冷链运输审批申请 */
+    public static final String PERM_APPROVAL_APPLY = "coldchain:approval:apply";
+    /** 冷链运输审批（同意/驳回） */
+    public static final String PERM_APPROVAL_REVIEW = "coldchain:approval:review";
 }

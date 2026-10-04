@@ -42,7 +42,9 @@ V2 另增路线温区分段四张表（见下节）与 `seq_cc_route_no` 序列�
 
 内置账号：`dispatcher/dispatcher123`（调度）、`carrier/carrier123`（在途）、
 `receiver/receiver123`（签收）、`admin/admin123`（冷链温控管理员，V5 预警查看/导出/模板维护）、
-`qa/qa123`（V6 质量复核岗，唯一可复核关闭分级异常的角色）、`bootstrap/bootstrap`。
+`qa/qa123`（V6 质量复核岗，唯一可复核关闭分级异常的角色）、
+`inspector/inspector123`（V7 监管岗，抽检办理/导出/运输审批，授权 EAST、NORTH 区域）、
+`inspector2/inspector123`（V7 第二个监管账号，仅授权 SOUTH 区域）、`bootstrap/bootstrap`。
 
 | 动作 | 方法与路径 |
 | --- | --- |
@@ -508,3 +510,113 @@ curl -u dispatcher:dispatcher123 -H 'Content-Type: application/json' -X POST \
 复核、驳回后时钟不重启可重处、QA 通过才关闭、未关闭异常拦截签收与结算、收货拒签即 L1；
 以及 Shiro 权限点的真实 HTTP 校验（401/403/200）。既有 V1/V5 测试同步改为新复核闭环口径，
 全套 26 个用例通过。
+
+## 冷链运输 V7：药品运输抽检与运输审批
+
+在 V1~V6 台账上新增监管侧“药品运输抽检”：监管人员按运输批次抽取样本、生成唯一封存码并
+记录采样人/位置/数量/封存照片；样本转移双人确认；已封存样本不可删除；查询按监管区域隔离；
+导出脱敏承运人联系方式；抽检结论回写批次但不覆盖原始运输记录。冷链药品运输审批两步走，
+只完成一半时停留待处理，审批期间抽检任务与样本封存照常可办、全程可追溯。
+
+### 核心规则
+
+- **按批次立项、区域归属**：抽检任务挂在运输批次下并归属监管区域；区域可在派车时用
+  `superviseRegion` 指定，也可在首次抽检时由账号唯一授权区域补登（一经确定不再改变）。
+  监管账号的区域授权在 `t_cc_inspector_region`（可多区，`*` 为全域，仅 admin）。
+- **唯一封存码 + 封存四要素**：封存样本时由序列生成封存码 `FC年+8位序列`，数据库唯一约束
+  兜底、永不复用；封存当刻固化采样人、采样位置、数量（>0）与封存照片（名称/地址/内容
+  SHA-256 摘要）。
+- **样本只进不退、不可删除**：样本状态只沿 `SEALED -> TRANSFERRED` 前进，当前持有方随
+  双人确认转移；系统不提供任何修改/删除样本或照片的接口；任务已定稿不能再封存样本。
+- **转移双人确认**：移交人发起即落移交人确认，单据停留 `PENDING`；必须由**不同于移交人的
+  第二个登录账号**确认才 `CONFIRMED`，持有方随之转移。一个样本同时只允许一条 PENDING 转移；
+  每次转移追加一行形成完整转移链，确认事实不可重复/改写。
+- **查询按监管区域隔离**：列表/详情/按批次查询/导出都先解析当前账号授权区域，越权访问
+  直接拒绝；无区域授权查不到任何数据。
+- **导出脱敏**：抽检样本 CSV 只导授权区域数据，承运人联系方式（驾驶员电话）脱敏为
+  `前3位+******+后2位`（如 `13912345678 -> 139******78`），导出逐次写审计流水。
+- **结论回写批次但不覆盖原始运输记录**：抽检结论（PASS/FAIL + 说明）只写批次的独立列
+  `inspection_*`，不改动批次状态、温度、异常、交接、结算等任何原始运输记录；结论一次定稿。
+- **运输审批两步、半成品停留**：`POST /approvals` 申请后停留 `PENDING`（只完成一半），
+  经监管岗 `approve` 同意才 `APPROVED`、批次方可发运；`reject` 驳回停留 `REJECTED`，
+  可重新申请。PENDING/REJECTED 都在发运卡口拦截。审批进行期间抽检立项、样本封存、双人
+  转移照常办理、可追溯。
+
+### 表结构增量（详见 schema.sql，版本标记 `cold-chain-7`）
+
+- 新增 `t_cc_inspector_region`（监管账号-区域授权，含演示种子）、
+  `t_cc_inspection_task`（抽检任务）、`t_cc_inspection_sample`（样本/封存码/照片）、
+  `t_cc_sample_transfer`（双人转移单）、`t_cc_inspection_approval`（运输审批）；
+  序列 `seq_cc_inspection_no/seq_cc_seal_no/seq_cc_approval_no`。
+- `t_cc_transport_batch` 增 `supervise_region/inspection_task_id/inspection_result/
+  inspection_conclusion/inspection_by/inspection_time`（独立抽检列，不覆盖原始运输记录）。
+
+### 接口增量（仍在 `/api/cold-chain` 下，HTTP Basic）
+
+| 动作 | 方法与路径 | 权限 |
+| --- | --- | --- |
+| 立项抽检任务（按批次+区域） | `POST /inspections` | `coldchain:inspection:manage` |
+| 封存样本（唯一封存码+四要素） | `POST /inspections/samples/seal` | `coldchain:inspection:manage` |
+| 移交发起（停留待接收确认） | `POST /inspections/samples/transfers/request` | `coldchain:inspection:manage` |
+| 接收人第二账号确认 | `POST /inspections/samples/transfers/{id}/confirm` | `coldchain:inspection:manage` |
+| 出具结论（回写批次独立列） | `POST /inspections/{id}/conclude` | `coldchain:inspection:manage` |
+| 任务列表/详情/按批次查询（区域隔离） | `GET /inspections`、`GET /inspections/{id}`、`GET /inspections/batch/{batchId}` | `coldchain:inspection:view` |
+| 导出样本 CSV（区域隔离+电话脱敏） | `GET /inspections/export` | `coldchain:inspection:export` |
+| 运输审批申请 | `POST /approvals` | `coldchain:approval:apply` |
+| 审批同意 / 驳回 | `POST /approvals/{id}/approve`、`/reject` | `coldchain:approval:review` |
+| 待处理审批 / 批次审批链 / 详情 | `GET /approvals/pending`、`/batch/{batchId}`、`/{id}` | 审批权限 / 登录 |
+
+示例（监管人封存样本、双人转移、出结论）：
+
+```bash
+# 立项（区域必须在 inspector 授权范围内）
+curl -u inspector:inspector123 -H 'Content-Type: application/json' -X POST \
+  http://localhost:8080/api/cold-chain/inspections -d \
+  '{"batchId":1,"superviseRegion":"EAST","taskName":"在途疫苗随机抽检",
+    "samplingLocation":"沪杭高速嘉兴服务区冷链车车厢","samplerName":"周监"}'
+
+# 封存样本：返回唯一封存码、固化采样人/位置/数量/封存照片
+curl -u inspector:inspector123 -H 'Content-Type: application/json' -X POST \
+  http://localhost:8080/api/cold-chain/inspections/samples/seal -d \
+  '{"taskId":1,"quantity":3,"sampleLocation":"车厢上层A位","samplerName":"周监",
+    "sealPhotoName":"seal1.jpg","sealPhotoUrl":"/v7/seal1","sealPhotoContent":"照片字节"}'
+
+# 移交发起（inspector），再由另一个账号（如 admin）确认；同一账号自确认会被拒绝
+curl -u inspector:inspector123 -H 'Content-Type: application/json' -X POST \
+  http://localhost:8080/api/cold-chain/inspections/samples/transfers/request -d \
+  '{"sampleId":1,"toCustodianName":"检验所收件员郑检","toCustodianOrg":"市药检所收样室",
+    "handoverLocation":"嘉兴服务区"}'
+curl -u admin:admin123 -H 'Content-Type: application/json' -X POST \
+  http://localhost:8080/api/cold-chain/inspections/samples/transfers/1/confirm -d \
+  '{"receiverNote":"封签完好，冷链温度达标"}'
+
+# 结论回写批次独立列（不改原始运输记录）
+curl -u inspector:inspector123 -H 'Content-Type: application/json' -X POST \
+  http://localhost:8080/api/cold-chain/inspections/1/conclude -d \
+  '{"result":"PASS","conclusion":"温控链完整、包装完好，抽检合格"}'
+
+# 导出（承运人电话脱敏）
+curl -u inspector:inspector123 http://localhost:8080/api/cold-chain/inspections/export?region=EAST
+```
+
+示例（冷链运输审批两步；半成品停留期间不能发运，但抽检照常）：
+
+```bash
+# 调度申请 -> PENDING
+curl -u dispatcher:dispatcher123 -H 'Content-Type: application/json' -X POST \
+  http://localhost:8080/api/cold-chain/approvals -d \
+  '{"batchId":1,"reason":"疫苗冷链运输放行申请"}'
+# 监管同意后才能发运；未同意前 /batches/1/ship 被“只完成一半/停留待处理”拦截
+curl -u inspector:inspector123 -H 'Content-Type: application/json' -X POST \
+  http://localhost:8080/api/cold-chain/approvals/1/approve -d '{"reviewNote":"同意放行"}'
+```
+
+### V7 验收
+
+`InspectionSamplingIntegrationTest`（5 个用例，内存 H2 + 真实 Shiro HTTP Basic）覆盖：
+唯一封存码与采样人/位置/数量/封存照片留痕、同一账号自确认拒绝与第二账号双人确认转移、
+待确认期间禁止二次移交、已封存样本无删除路径、结论回写批次独立列且批次状态/数量/签收/派车
+时间等原始运输记录不变、结论一次定稿、批次台账可追溯任务-样本-双人转移链；查询/详情/按批次
+查询跨区域隔离（EAST 账号看不到 SOUTH）；导出 CSV 电话脱敏为 `139******78` 且无导出权限
+返回 403；运输审批半成品 PENDING 拦截发运、审批期间抽检封存照常、同意后放行、驳回可重申；
+以及无抽检/审批权限账号的 403 校验。全套 33 个用例通过。

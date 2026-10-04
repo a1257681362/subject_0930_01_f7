@@ -43,7 +43,9 @@ public class ColdChainRealm extends AuthorizingRealm {
                 CcConstants.PERM_EXCEPTION_CONFIRM,
                 CcConstants.PERM_EXCEPTION_CONCLUDE,
                 CcConstants.PERM_EXCEPTION_NOTIFY_RETRY,
-                CcConstants.PERM_BATCH_SETTLE)));
+                CcConstants.PERM_BATCH_SETTLE,
+                // V7：调度发起冷链药品运输审批申请（监管岗审批同意后方可发运）
+                CcConstants.PERM_APPROVAL_APPLY)));
         // 承运岗：温度超限/延误的处置岗位，可确认异常与提交处置结论
         put("carrier", 3L, "carrier123", "CARRIER", new LinkedHashSet<>(Arrays.asList(
                 CcConstants.PERM_EXCEPTION_CONFIRM,
@@ -71,6 +73,17 @@ public class ColdChainRealm extends AuthorizingRealm {
         put("qa", 6L, "qa123", "QA", new LinkedHashSet<>(Arrays.asList(
                 CcConstants.PERM_ALERT_VIEW,
                 CcConstants.PERM_EXCEPTION_REVIEW)));
+        // V7 监管岗：按批次抽检（立项/封存/双人转移/结论）+ 抽检台账导出 + 冷链运输审批；
+        // 具体能访问哪些监管区域由 t_cc_inspector_region 授权（EAST/NORTH），查询再按区域隔离
+        put("inspector", 7L, "inspector123", "INSPECTOR", new LinkedHashSet<>(Arrays.asList(
+                CcConstants.PERM_INSPECTION_VIEW,
+                CcConstants.PERM_INSPECTION_MANAGE,
+                CcConstants.PERM_INSPECTION_EXPORT,
+                CcConstants.PERM_APPROVAL_REVIEW)));
+        // V7 第二个监管账号：仅授权 SOUTH 区域（用于跨区域隔离验收），无运输审批权
+        put("inspector2", 8L, "inspector123", "INSPECTOR", new LinkedHashSet<>(Arrays.asList(
+                CcConstants.PERM_INSPECTION_VIEW,
+                CcConstants.PERM_INSPECTION_MANAGE)));
     }
 
     private static void put(String username, long id, String password, String role, Set<String> perms) {

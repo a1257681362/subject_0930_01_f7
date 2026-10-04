@@ -115,6 +115,35 @@ public class ShiroConfig {
         chain.addPathDefinition("/api/cold-chain/batches/settle",
                 "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_BATCH_SETTLE + "]");
 
+        // —— V7 药品运输抽检（具体写路径在前，宽泛只读在后）——
+        // 导出：独立导出权限（承运人联系方式脱敏）
+        chain.addPathDefinition("/api/cold-chain/inspections/export",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_EXPORT + "]");
+        // 样本封存/双人转移等办理动作
+        chain.addPathDefinition("/api/cold-chain/inspections/samples/**",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_MANAGE + "]");
+        chain.addPathDefinition("/api/cold-chain/inspections/*/conclude",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_MANAGE + "]");
+        // 列表/立项同路径（GET 列表 / POST 立项）：先过查看权限，立项在服务内二次校验 manage
+        chain.addPathDefinition("/api/cold-chain/inspections",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_VIEW + "]");
+        // 抽检详情等只读（必须放在精确路径之后）
+        chain.addPathDefinition("/api/cold-chain/inspections/**",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_VIEW + "]");
+
+        // —— V7 冷链药品运输审批（两步：申请 -> 同意/驳回）——
+        chain.addPathDefinition("/api/cold-chain/approvals/pending",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_APPROVAL_REVIEW + "]");
+        chain.addPathDefinition("/api/cold-chain/approvals/*/approve",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_APPROVAL_REVIEW + "]");
+        chain.addPathDefinition("/api/cold-chain/approvals/*/reject",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_APPROVAL_REVIEW + "]");
+        // 申请（调度；必须放在宽泛只读路径之前，先匹配先生效）
+        chain.addPathDefinition("/api/cold-chain/approvals",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_APPROVAL_APPLY + "]");
+        // 审批详情/批次审批链只读：登录即可（区域隔离在服务层兜底）
+        chain.addPathDefinition("/api/cold-chain/approvals/**", "authcBasic");
+
         // 冷链台账接口与管理页面使用 HTTP Basic，便于 curl/联调；浏览器会弹出登录框
         chain.addPathDefinition("/api/**", "authcBasic");
         chain.addPathDefinition("/ui/**", "authcBasic");

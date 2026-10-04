@@ -13,6 +13,11 @@ public class DispatchRequest {
      * 不传则保持 V1 全程单一档案温区口径。
      */
     private Long routeId;
+    /**
+     * V7 可选监管区域：传入则随批次固化，作为抽检查询区域隔离依据；
+     * 不传也可在首次对该批次立项抽检时补登，补登后不再改变。
+     */
+    private String superviseRegion;
 
     public Long getOrderId() { return orderId; }
     public void setOrderId(Long orderId) { this.orderId = orderId; }
@@ -20,4 +25,6 @@ public class DispatchRequest {
     public void setVehicleId(Long vehicleId) { this.vehicleId = vehicleId; }
     public Long getRouteId() { return routeId; }
     public void setRouteId(Long routeId) { this.routeId = routeId; }
+    public String getSuperviseRegion() { return superviseRegion; }
+    public void setSuperviseRegion(String superviseRegion) { this.superviseRegion = superviseRegion; }
 }
