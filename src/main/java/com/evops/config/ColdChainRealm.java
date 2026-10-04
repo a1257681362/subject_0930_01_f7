@@ -71,6 +71,19 @@ public class ColdChainRealm extends AuthorizingRealm {
         put("qa", 6L, "qa123", "QA", new LinkedHashSet<>(Arrays.asList(
                 CcConstants.PERM_ALERT_VIEW,
                 CcConstants.PERM_EXCEPTION_REVIEW)));
+        // —— V7 药品运输抽检监管岗 ——
+        // inspector / inspector2 同属华东监管区（预置区域绑定），用于样本转移双人确认的两名监管人员；
+        // inspector3 属华南监管区，用于验证抽检数据按监管区域隔离（跨区域不可见/不可操作）。
+        java.util.Set<String> inspectorPerms = new LinkedHashSet<>(Arrays.asList(
+                CcConstants.PERM_INSPECTION_VIEW,
+                CcConstants.PERM_INSPECTION_MANAGE,
+                CcConstants.PERM_SAMPLE_TRANSFER,
+                CcConstants.PERM_INSPECTION_EXPORT));
+        put("inspector", 7L, "inspector123", "INSPECTOR", inspectorPerms);
+        put("inspector2", 8L, "inspector123", "INSPECTOR", new LinkedHashSet<>(inspectorPerms));
+        put("inspector3", 9L, "inspector123", "INSPECTOR", new LinkedHashSet<>(inspectorPerms));
+        // 华东第三名监管人员：与 inspector/inspector2 同区域，但不是指定接收方时无权代确认（双人确认专人专户）
+        put("inspector4", 10L, "inspector123", "INSPECTOR", new LinkedHashSet<>(inspectorPerms));
     }
 
     private static void put(String username, long id, String password, String role, Set<String> perms) {

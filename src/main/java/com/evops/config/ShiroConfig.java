@@ -115,6 +115,34 @@ public class ShiroConfig {
         chain.addPathDefinition("/api/cold-chain/batches/settle",
                 "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_BATCH_SETTLE + "]");
 
+        // —— V7 药品运输抽检：建任务/封存/发起转移/结论/作废/区域绑定 走管理权限，
+        //    第二人确认单独走转移权限（双人确认职责分离），导出单独走导出权限，只读走查看权限 ——
+        chain.addPathDefinition("/api/cold-chain/inspections/tasks/create",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_MANAGE + "]");
+        chain.addPathDefinition("/api/cold-chain/inspections/samples/seal",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_MANAGE + "]");
+        chain.addPathDefinition("/api/cold-chain/inspections/transfers/start",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_MANAGE + "]");
+        chain.addPathDefinition("/api/cold-chain/inspections/transfers/confirm",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_SAMPLE_TRANSFER + "]");
+        chain.addPathDefinition("/api/cold-chain/inspections/conclude",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_MANAGE + "]");
+        chain.addPathDefinition("/api/cold-chain/inspections/void",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_MANAGE + "]");
+        chain.addPathDefinition("/api/cold-chain/inspections/regions",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_MANAGE + "]");
+        chain.addPathDefinition("/api/cold-chain/inspections/export",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_EXPORT + "]");
+        chain.addPathDefinition("/api/cold-chain/inspections/tasks/*",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_VIEW + "]");
+        chain.addPathDefinition("/api/cold-chain/inspections/tasks",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_VIEW + "]");
+        chain.addPathDefinition("/api/cold-chain/inspections/pending",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_VIEW + "]");
+        // 抽检管理页面同样需要查看权限
+        chain.addPathDefinition("/ui/cold-chain/inspections",
+                "authcBasic, perms[" + com.evops.coldchain.CcConstants.PERM_INSPECTION_VIEW + "]");
+
         // 冷链台账接口与管理页面使用 HTTP Basic，便于 curl/联调；浏览器会弹出登录框
         chain.addPathDefinition("/api/**", "authcBasic");
         chain.addPathDefinition("/ui/**", "authcBasic");

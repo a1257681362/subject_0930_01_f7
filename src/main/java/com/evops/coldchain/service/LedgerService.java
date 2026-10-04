@@ -62,6 +62,8 @@ public class LedgerService {
     @Resource
     private HandoverService handoverService;
     @Resource
+    private InspectionService inspectionService;
+    @Resource
     private PermissionService permissionService;
     @Resource
     private ExceptionLifecycleService exceptionLifecycleService;
@@ -193,6 +195,16 @@ public class LedgerService {
         settleInfo.put("settleRemark", batch.getSettleRemark());
         settleInfo.put("settled", batch.getSettleTime() != null);
         ledger.put("settlement", settleInfo);
+
+        // V7 药品运输抽检：按批次可追溯全部抽检任务、样本封存（唯一封存码/采样人/位置/数量/照片摘要）
+        // 与样本转移双人确认记录；抽检结论作为批次附加监管信息，不改变原始运输记录。
+        Map<String, Object> inspectionInfo = new LinkedHashMap<>();
+        inspectionInfo.put("inspectionResult", batch.getInspectionResult());
+        inspectionInfo.put("inspectionNote", batch.getInspectionNote());
+        inspectionInfo.put("inspectionTime", batch.getInspectionTime());
+        inspectionInfo.putAll(inspectionService.inspectionViewForBatch(batchId));
+        ledger.put("inspections", inspectionInfo);
+
         ledger.put("opLogs", opLogs);
         return ledger;
     }

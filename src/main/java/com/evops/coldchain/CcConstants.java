@@ -215,4 +215,51 @@ public final class CcConstants {
     public static final String ACT_EXC_ESCALATE = "EXCEPTION_ESCALATE";
     public static final String ACT_BATCH_REJECT = "BATCH_REJECT";
     public static final String ACT_BATCH_SETTLE = "BATCH_SETTLE";
+
+    // —— V7 药品运输抽检 —— 实体类型 ——
+    /** 抽检任务 */
+    public static final String ENT_INSPECTION = "INSPECTION";
+    /** 抽检样本（封存） */
+    public static final String ENT_INSPECTION_SAMPLE = "INSPECTION_SAMPLE";
+    /** 样本转移双人确认 */
+    public static final String ENT_SAMPLE_TRANSFER = "SAMPLE_TRANSFER";
+
+    // 抽检任务状态：PENDING 待抽样 / SEALED 已封存 / CONCLUDING 转移完成待结论 / CONCLUDED 已出结论 / VOIDED 已作废
+    public static final String INSP_PENDING = "PENDING";
+    public static final String INSP_SEALED = "SEALED";
+    public static final String INSP_CONCLUDING = "CONCLUDING";
+    public static final String INSP_CONCLUDED = "CONCLUDED";
+    public static final String INSP_VOIDED = "VOIDED";
+
+    // 抽检样本状态：SEALED 已封存 / IN_TRANSFER 转移中待第二人确认 / RECEIVED 已接收（无删除状态）
+    public static final String SAMPLE_SEALED = "SEALED";
+    public static final String SAMPLE_IN_TRANSFER = "IN_TRANSFER";
+    public static final String SAMPLE_RECEIVED = "RECEIVED";
+
+    // 样本转移双人确认状态：PENDING 第一人已发起待第二人确认 / CONFIRMED 双人确认完成
+    public static final String TRANSFER_PENDING = "PENDING";
+    public static final String TRANSFER_CONFIRMED = "CONFIRMED";
+
+    // 抽检结论：QUALIFIED 合格 / UNQUALIFIED 不合格
+    public static final String INSP_QUALIFIED = "QUALIFIED";
+    public static final String INSP_UNQUALIFIED = "UNQUALIFIED";
+
+    // V7 操作动作
+    public static final String ACT_INSPECTION_CREATE = "INSPECTION_CREATE";
+    public static final String ACT_SAMPLE_SEAL = "SAMPLE_SEAL";
+    public static final String ACT_SAMPLE_TRANSFER_START = "SAMPLE_TRANSFER_START";
+    public static final String ACT_SAMPLE_TRANSFER_CONFIRM = "SAMPLE_TRANSFER_CONFIRM";
+    public static final String ACT_INSPECTION_CONCLUDE = "INSPECTION_CONCLUDE";
+    public static final String ACT_INSPECTION_VOID = "INSPECTION_VOID";
+    public static final String ACT_INSPECTION_EXPORT = "INSPECTION_EXPORT";
+
+    // —— V7 Shiro 权限点 ——
+    /** 抽检任务管理（建任务/抽样封存/发起转移/出结论/作废） */
+    public static final String PERM_INSPECTION_MANAGE = "coldchain:inspection:manage";
+    /** 样本转移第二人确认（双人确认中的接收方） */
+    public static final String PERM_SAMPLE_TRANSFER = "coldchain:inspection:transfer";
+    /** 抽检查询（按监管区域隔离） */
+    public static final String PERM_INSPECTION_VIEW = "coldchain:inspection:view";
+    /** 抽检导出（承运人联系方式脱敏） */
+    public static final String PERM_INSPECTION_EXPORT = "coldchain:inspection:export";
 }

@@ -42,7 +42,10 @@ V2 另增路线温区分段四张表（见下节）与 `seq_cc_route_no` 序列�
 
 内置账号：`dispatcher/dispatcher123`（调度）、`carrier/carrier123`（在途）、
 `receiver/receiver123`（签收）、`admin/admin123`（冷链温控管理员，V5 预警查看/导出/模板维护）、
-`qa/qa123`（V6 质量复核岗，唯一可复核关闭分级异常的角色）、`bootstrap/bootstrap`。
+`qa/qa123`（V6 质量复核岗，唯一可复核关闭分级异常的角色）、
+`inspector/inspector123`、`inspector2/inspector123`（V7 华东监管区两名监管人员，样本转移双人确认双方）、
+`inspector3/inspector123`（V7 华南监管区，验证区域隔离）、`inspector4/inspector123`（V7 华东第三名监管人）、
+`bootstrap/bootstrap`。
 
 | 动作 | 方法与路径 |
 | --- | --- |
@@ -508,3 +511,116 @@ curl -u dispatcher:dispatcher123 -H 'Content-Type: application/json' -X POST \
 复核、驳回后时钟不重启可重处、QA 通过才关闭、未关闭异常拦截签收与结算、收货拒签即 L1；
 以及 Shiro 权限点的真实 HTTP 校验（401/403/200）。既有 V1/V5 测试同步改为新复核闭环口径，
 全套 26 个用例通过。
+
+---
+
+## 冷链运输 V7：药品运输抽检
+
+在 V1~V6 台账上增加监管侧“药品运输抽检”：监管人员按运输批次发起抽检任务、按批次抽取样本并现场封存，
+系统生成唯一封存码并记录采样人、实际采样位置、抽样数量与封存照片；样本转移必须双人确认，
+审批只完成一半时系统停留“待处理”；已封存样本不可删除；查询按监管区域隔离；导出文件对承运人
+联系方式脱敏；抽检结论只回写批次抽检专用列，不覆盖任何原始运输记录。抽检任务与样本封存全链路可追溯。
+
+### 核心规则
+
+- **任务按批次发起、按监管区域隔离**：抽检任务归属发起监管人员绑定的监管区域
+  （`t_cc_inspector_region`，一个账号一个区域，区域不接受前端传入）。任务列表/详情/封存/转移/结论
+  全部强制按当前登录人的区域过滤，跨区域访问按“不可见”处理（不泄露任务是否存在）；未绑定区域的
+  监管账号不能发起或查看抽检。建任务时把批次号、承运商、承运人、承运人电话、车牌快照到任务。
+- **抽样封存生成唯一封存码**：每封存一个样本生成库内唯一封存码 `FC+8位序列+1位校验位`
+  （任务号 `CJ+8位+1位校验位`，数据库唯一约束兜底、序列单调不复用），并记录采样人、采样人账号、
+  **实际采样位置**、抽样数量（>0）、采样时间与**封存照片**；照片内容落库即计算 **SHA-256** 摘要
+  （与 V3 校准凭证摘要同一套确定性口径）。
+- **已封存样本不可删除**：样本行只追加，状态 `SEALED -> IN_TRANSFER -> RECEIVED` 单向流转，
+  系统不提供任何删除/回退路径（无 DELETED 状态）。任务仅在从未封存样本（`PENDING`）时可作废为
+  `VOIDED`；一旦封存即禁止作废，已出结论不可作废、不可重复出具。
+- **样本转移必须双人确认，半程停留待处理**：交出方（当前持有方，第一人）发起转移时必须指定一名
+  **与自己不同账号**的接收方；发起后转移单为 `PENDING`、样本停留 `IN_TRANSFER`。必须由转移单
+  指定的接收方本人（第二人）确认，转移才 `CONFIRMED`、样本转 `RECEIVED` 且持有方转移给接收方。
+  半程期间不能重复发起转移，交出方本人、同区域非指定接收方、跨区域账号都不能代确认；
+  双方账号 ID/姓名、交出与确认时间逐次留痕（`t_cc_sample_transfer` 只追加）。
+- **抽检结论回写批次但不覆盖原始运输记录**：出结论要求至少封存一个样本且**无停留半程的转移**；
+  合格 `QUALIFIED` / 不合格 `UNQUALIFIED` 只写入任务结论列与批次 `inspection_result/note/time`
+  三个抽检专用列，**不改变批次状态、签收信息、责任主体、温度、异常等任何原始运输记录**
+  （服务内带回写前后防御性自检，发现原始字段变动即回滚）。
+- **查询隔离 + 导出脱敏 + 全量留痕**：查询接口按监管区域隔离；导出本区域抽检 CSV 时对承运人
+  联系电话脱敏（保留前 3 位与后 2 位，其余 `*`，库内原值保留），UTF-8 BOM，逐次写导出审计流水；
+  建任务/封存/转移发起/转移确认/结论/作废/导出均写 `t_cc_op_log` 并带 `batch_id`，
+  批次台账 `GET /batches/{id}/ledger` 可完整追溯抽检任务、样本封存与双人转移全部节点。
+
+### 表结构增量（详见 schema.sql，版本标记 `cold-chain-7`）
+
+- 新增 `t_cc_inspection_task`（抽检任务，区域归属+批次承运人快照+结论）、
+  `t_cc_inspection_sample`（抽检样本，唯一封存码/采样人/位置/数量/封存照片 SHA-256，只追加不可删）、
+  `t_cc_sample_transfer`（样本转移双人确认，只追加）、
+  `t_cc_inspector_region`（监管人员-监管区域绑定），
+  序列 `seq_cc_inspection_no`（CJ 任务号）与 `seq_cc_seal_no`（FC 封存码）。
+- `t_cc_transport_batch` 增 `inspection_result / inspection_note / inspection_time`
+  （抽检结论专用回写列，不触碰原始运输列）。
+- 预置演示区域绑定：账号 7=inspector / 8=inspector2 / 10=inspector4 属华东 `HD`，
+  9=inspector3 属华南 `HN`。
+
+### 接口增量（均在 `/api/cold-chain/inspections` 下，HTTP Basic）
+
+| 动作 | 方法与路径 | 权限 |
+| --- | --- | --- |
+| 绑定监管人员-监管区域 | `POST /regions` | `coldchain:inspection:manage` |
+| 按批次发起抽检任务 | `POST /tasks/create` | `coldchain:inspection:manage` |
+| 抽检任务列表（按区域隔离，可批次/状态过滤） | `GET /tasks` | `coldchain:inspection:view` |
+| 待处理视图（待抽样任务+半程转移） | `GET /pending` | `coldchain:inspection:view` |
+| 任务详情（样本+双人转移+批次日志） | `GET /tasks/{id}` | `coldchain:inspection:view` |
+| 抽样封存（唯一封存码/采样人/位置/数量/照片） | `POST /samples/seal` | `coldchain:inspection:manage` |
+| 转移第一步：交出方发起（半程停留） | `POST /transfers/start` | `coldchain:inspection:manage` |
+| 转移第二步：指定接收方本人确认 | `POST /transfers/confirm` | `coldchain:inspection:transfer` |
+| 抽检结论回写批次（不覆盖运输记录） | `POST /conclude` | `coldchain:inspection:manage` |
+| 作废未抽样任务（已封存禁止） | `POST /void` | `coldchain:inspection:manage` |
+| 导出本区域抽检 CSV（承运人电话脱敏） | `GET /export` | `coldchain:inspection:export` |
+| 批次完整台账（含抽检全链路） | `GET /batches/{id}/ledger` | 登录即可 |
+| 抽检管理页面 | `GET /ui/cold-chain/inspections` | `coldchain:inspection:view` |
+
+示例（华东 inspector 发起→封存→双人转移→结论回写）：
+
+```bash
+# 1) 按批次发起抽检任务（区域取 inspector 绑定的华东 HD，前端不可指定）
+curl -u inspector:inspector123 -H 'Content-Type: application/json' -X POST \
+  http://localhost:8080/api/cold-chain/inspections/tasks/create \
+  -d '{"batchId":1,"samplingLocation":"沪杭高速K50抽检点","samplingBasis":"2026年度冷链监督抽检计划"}'
+
+# 2) 抽样封存：系统生成唯一封存码，采样人/位置/数量/封存照片留痕（照片算 SHA-256）
+curl -u inspector:inspector123 -H 'Content-Type: application/json' -X POST \
+  http://localhost:8080/api/cold-chain/inspections/samples/seal \
+  -d '{"inspectionId":1,"sampleQty":3,"samplingLocation":"30.27N,120.15E 沪杭高速K50",
+       "samplerName":"王监管","photoFileName":"seal-a.jpg","photoFileContent":"封存照片二进制占位内容"}'
+# -> data.sealCode 如 FC800000017（唯一）；任务进入 SEALED，已封存不可作废/删除
+
+# 3) 双人转移：inspector(账号ID=7) 发起给 inspector2(账号ID=8)，样本停留 IN_TRANSFER 待处理
+curl -u inspector:inspector123 -H 'Content-Type: application/json' -X POST \
+  http://localhost:8080/api/cold-chain/inspections/transfers/start \
+  -d '{"sampleId":1,"toHolderId":8,"toHolderName":"李监管","fromLocation":"沪杭高速K50",
+       "toLocation":"杭州市药检所样品室","transferNote":"冷链抽检样本移交检验"}'
+
+# 4) 必须由指定接收方 inspector2 本人确认（7 自己确认/他人代确认/跨区域均被拦截）
+curl -u inspector2:inspector123 -H 'Content-Type: application/json' -X POST \
+  http://localhost:8080/api/cold-chain/inspections/transfers/confirm \
+  -d '{"transferId":1,"confirmNote":"封签完好，样本温度正常，接收"}'
+
+# 5) 全部样本完成双人转移后出结论：只回写批次抽检专用列，批次状态/签收/责任主体保持不变
+curl -u inspector:inspector123 -H 'Content-Type: application/json' -X POST \
+  http://localhost:8080/api/cold-chain/inspections/conclude \
+  -d '{"inspectionId":1,"result":"UNQUALIFIED","note":"温控记录不完整，判定不合格，移交处置"}'
+
+# 6) 导出本区域抽检 CSV：承运人电话脱敏为 138******34，逐次写导出审计流水
+curl -u inspector:inspector123 -OJ http://localhost:8080/api/cold-chain/inspections/export
+```
+
+### V7 验收
+
+`InspectionSamplingIntegrationTest`（4 个用例，内存 H2 + 真实 HTTP 入口 + Shiro Basic）覆盖：
+抽样封存生成库内唯一封存码、采样人/位置/数量落库与封存照片 SHA-256 确定性、任务首封转 SEALED；
+双人确认第一人发起后停留 `PENDING/IN_TRANSFER`（重复发起、交出方本人确认、同区域非指定接收方代确认、
+跨区域确认、半程出结论均被拦截），指定第二人确认后样本 RECEIVED、持有方转移、不可重复确认；
+已封存样本物理行保留不可删除且任务不可作废，未抽样任务可作废；查询按监管区域隔离（华南 inspector3
+看不到华东任务）、未认证 401、无权限承运岗 403；导出 CSV 承运人电话脱敏（保留前3后2）且逐次写审计流水；
+抽检结论只回写批次 `inspection_*` 而批次状态/签收/责任主体原值不变、不可重复出具；
+批次台账可追溯任务/样本封存/双人转移，封存/转移/结论动作逐次写操作流水。
+全套（V1~V7）32 个用例通过。

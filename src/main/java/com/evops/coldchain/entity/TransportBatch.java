@@ -71,6 +71,12 @@ public class TransportBatch extends BaseEntity {
     private Long settleBy;
     private String settleRemark;
 
+    // —— V7：抽检结论专用列（抽检结论只回写这三列；不触碰状态/签收/责任主体等原始运输记录）——
+    /** QUALIFIED 合格 / UNQUALIFIED 不合格；空=该批次尚未被回写抽检结论 */
+    private String inspectionResult;
+    private String inspectionNote;
+    private LocalDateTime inspectionTime;
+
     public String getBatchNo() { return batchNo; }
     public void setBatchNo(String batchNo) { this.batchNo = batchNo; }
     public Long getOrderId() { return orderId; }
@@ -151,4 +157,12 @@ public class TransportBatch extends BaseEntity {
     public void setSettleBy(Long settleBy) { this.settleBy = settleBy; }
     public String getSettleRemark() { return settleRemark; }
     public void setSettleRemark(String settleRemark) { this.settleRemark = settleRemark; }
+
+    // —— V7：抽检结论回写（不覆盖原始运输记录）——
+    public String getInspectionResult() { return inspectionResult; }
+    public void setInspectionResult(String inspectionResult) { this.inspectionResult = inspectionResult; }
+    public String getInspectionNote() { return inspectionNote; }
+    public void setInspectionNote(String inspectionNote) { this.inspectionNote = inspectionNote; }
+    public LocalDateTime getInspectionTime() { return inspectionTime; }
+    public void setInspectionTime(LocalDateTime inspectionTime) { this.inspectionTime = inspectionTime; }
 }
